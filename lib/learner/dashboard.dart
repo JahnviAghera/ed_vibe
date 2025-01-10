@@ -344,7 +344,7 @@ class _DashboardState extends State<Dashboard> {
                                     Navigator.push(
                                       context,
                                       MaterialPageRoute(
-                                        builder: (context) => CourseDetailPage(courseId: courseId, userId: userId)
+                                          builder: (context) => CourseDetailPage(courseId: courseId, userId: userId)
                                       ),
                                     );
                                   },
@@ -363,6 +363,7 @@ class _DashboardState extends State<Dashboard> {
                                     ),
                                   ),
                                 ),
+
 
                               ),
                             ],
