@@ -1,110 +1,125 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 
-class CoursePage extends StatefulWidget {
+class CourseDetailPage extends StatefulWidget {
   final String courseId;
   final String userId;
 
-  CoursePage({required this.courseId, required this.userId});
+  const CourseDetailPage({Key? key, required this.courseId, required this.userId}) : super(key: key);
 
   @override
-  _CoursePageState createState() => _CoursePageState();
+  _CourseDetailPageState createState() => _CourseDetailPageState();
 }
 
-class _CoursePageState extends State<CoursePage> {
-  Map<String, dynamic>? course;
-  bool isLoading = true;
+class _CourseDetailPageState extends State<CourseDetailPage> {
+  final DatabaseReference _dbRef = FirebaseDatabase.instance.ref();
+  late DatabaseReference _courseRef;
+  late DatabaseReference _userRef;
+
+  Map<String, dynamic> course = {};
+  bool isEnrolled = false;
 
   @override
   void initState() {
     super.initState();
-    // Fetch course data from Firebase on page load
-    _fetchCourseData();
+    _courseRef = _dbRef.child('courses').child(widget.courseId);
+    _userRef = _dbRef.child('users').child(widget.userId);
+    fetchCourseDetails();
   }
 
-  // Fetch course data from Firebase
-  Future<void> _fetchCourseData() async {
-    final courseRef = FirebaseDatabase.instance.ref().child('courses/${widget.courseId}');
-    try {
-      final snapshot = await courseRef.get();
-      if (snapshot.exists) {
-        setState(() {
-          course = Map<String, dynamic>.from(snapshot.value as Map);
-          isLoading = false;
-        });
-      } else {
-        setState(() {
-          isLoading = false;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Course not found!')));
-      }
-    } catch (e) {
+  Future<void> fetchCourseDetails() async {
+    // Fetch course details from Firebase
+    final courseSnapshot = await _courseRef.get();
+    if (courseSnapshot.exists) {
       setState(() {
-        isLoading = false;
+        course = Map<String, dynamic>.from(courseSnapshot.value as Map);
       });
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to load course data')));
     }
+
+    // Check if the user is already enrolled in this course
+    final userSnapshot = await _userRef.get();
+    if (userSnapshot.exists) {
+      final userData = Map<String, dynamic>.from(userSnapshot.value as Map);
+      setState(() {
+        isEnrolled = userData['enrolledCourses']?.contains(widget.courseId) ?? false;
+      });
+    }
+  }
+
+  Future<void> enrollInCourse() async {
+    // Enroll the user in the course by updating Firebase
+    await _userRef.update({
+      'enrolledCourses': FieldValue.arrayUnion([widget.courseId])
+    });
+    setState(() {
+      isEnrolled = true;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    if (isLoading) {
-      return Scaffold(
-        appBar: AppBar(title: Text('Course Details')),
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
-
-    if (course == null) {
-      return Scaffold(
-        appBar: AppBar(title: Text('Course Details')),
-        body: Center(child: Text('Course data is missing or not loaded')),
-      );
-    }
-
-    final String courseTitle = course?['title'] ?? 'Course'; // Default to 'Course' if null
-    final String courseDescription = course?['description'] ?? 'Course description goes here.'; // Default if null
-    final String? courseImageUrl = course?['imageUrl'];
-
     return Scaffold(
-      appBar: AppBar(title: Text(courseTitle)),
-      body: Padding(
+      appBar: AppBar(
+        title: Text(course['title'] ?? 'Course Details'),
+      ),
+      body: course.isEmpty
+          ? Center(child: CircularProgressIndicator())
+          : Padding(
         padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            // Course Image (if exists)
-            if (courseImageUrl != null && courseImageUrl.isNotEmpty)
-              Image.network(courseImageUrl, height: 200, width: double.infinity, fit: BoxFit.cover)
-            else
-              Image.asset('assets/example.png', height: 200, width: double.infinity, fit: BoxFit.cover),
-            SizedBox(height: 16),
-            // Course Title and Description
-            Text(
-              courseTitle,
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
-            SizedBox(height: 8),
-            Text(
-              courseDescription,
-              style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-            ),
-            SizedBox(height: 16),
-            // Enroll Button
-            ElevatedButton(
-              onPressed: () async {
-                final userCoursesRef = FirebaseDatabase.instance.ref().child('users/${widget.userId}/courses/${widget.courseId}');
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Course Image
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.asset(
+                  'assets/example.png',
+                  height: 200,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                ),
+              ),
+              SizedBox(height: 16),
+              // Course Title and Description
+              Text(
+                course['title'] ?? 'Course Title',
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: 8),
+              Text(
+                course['description'] ?? 'Course description goes here.',
+                style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+              ),
+              SizedBox(height: 16),
+              // Instructor Information
+              Text(
+                'Instructor: ${course['instructor'] ?? 'Instructor Name'}',
+                style: TextStyle(fontSize: 16),
+              ),
+              SizedBox(height: 8),
+              Text(
+                'Duration: ${course['duration'] ?? 'N/A'}',
+                style: TextStyle(fontSize: 16),
+              ),
+              SizedBox(height: 16),
+              // Enrollment Button
+              ElevatedButton(
+                onPressed: isEnrolled
+                    ? null // Disable if already enrolled
+                    : enrollInCourse,
+                style: ElevatedButton.styleFrom(
 
-                try {
-                  await userCoursesRef.set(true);  // Mark the course as enrolled
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('You have enrolled in the course!')));
-                  Navigator.pop(context); // Go back to the previous screen
-                } catch (e) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to enroll in the course.')));
-                }
-              },
-              child: Text('Enroll Now'),
-            ),
-          ],
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                ),
+                child: Text(
+                  isEnrolled ? 'Enrolled' : 'Enroll Now',
+                  style: TextStyle(fontSize: 16, color: Colors.white),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
