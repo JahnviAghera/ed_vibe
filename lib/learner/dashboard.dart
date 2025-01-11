@@ -1,5 +1,6 @@
 import 'dart:async';
-
+import 'dart:convert';
+import 'package:http/http.dart'as http;
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -416,13 +417,16 @@ class VideoPlayerScreen extends StatefulWidget {
   @override
   _VideoPlayerScreenState createState() => _VideoPlayerScreenState();
 }
+
 class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   late VideoPlayerController _controller;
   String videoUrl = '';
   List<Map<String, dynamic>> questions = [];
-  bool isLoading = true;  // Track loading state
-  int currentQuestionIndex = -1;  // Track current question index
-  bool showQuestion = false;  // To show/hide question
+  bool isLoading = true;
+  int currentQuestionIndex = -1;
+  bool showQuestion = false;
+  String geminiResponse = '';
+  final List<Map<String, String>> chatMessages = []; // List to store chat messages
 
   @override
   void initState() {
@@ -437,7 +441,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
           .ref()
           .child('courses/${widget.courseId}/videoContent/${widget.videoId}');
 
-      // Fetch data from Firebase Realtime Database
       DatabaseEvent event = await courseRef.once();
       DataSnapshot snapshot = event.snapshot;
 
@@ -446,9 +449,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
 
         setState(() {
           videoUrl = videoData['url'] ?? '';
-          isLoading = false;  // Video is ready
-
-          // Correct handling of 'questions' field as a list
+          isLoading = false;
           var videoQuestions = videoData['questions'];
           if (videoQuestions is List) {
             questions = videoQuestions.map((question) {
@@ -462,12 +463,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
           }
         });
 
-        print("Fetched video URL: $videoUrl");
-
         if (videoUrl.isNotEmpty) {
           _initializeVideoPlayer();
-        } else {
-          print("Video URL is empty.");
         }
       } else {
         print("No video data found.");
@@ -475,35 +472,30 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     } catch (e) {
       print("Error fetching video data: $e");
       setState(() {
-        isLoading = false;  // Stop loading if there's an error
+        isLoading = false;
       });
     }
   }
 
-  // Initialize video player
   void _initializeVideoPlayer() {
     _controller = VideoPlayerController.network(videoUrl)
       ..initialize().then((_) {
         setState(() {});
         _controller.addListener(() {
-          // Check if a question needs to be shown based on the timestamp
           _checkForQuestion(_controller.value.position.inSeconds.toDouble());
         });
       });
   }
 
-  // Show the next question when the timestamp is reached
   void _checkForQuestion(double currentTime) {
     for (int i = 0; i < questions.length; i++) {
-      if (currentTime == questions[i]['timestamp'] &&
-          currentQuestionIndex != i) {
+      if (currentTime == questions[i]['timestamp'] && currentQuestionIndex != i) {
         setState(() {
           currentQuestionIndex = i;
           showQuestion = true;
         });
-        // Only pause if the video is playing and the question is new
         if (_controller.value.isPlaying) {
-          _controller.pause();  // Pause video when question appears
+          _controller.pause();
         }
         break;
       }
@@ -512,33 +504,21 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
 
   void _handleAnswer(String selectedOption) {
     String correctOption = questions[currentQuestionIndex]['correctOption'];
-
     if (selectedOption == correctOption) {
       print("Correct Answer!");
-
-      // Add a slight delay before resuming the video to ensure it's fully ready
       Future.delayed(Duration(seconds: 2), () {
         if (_controller.value.isInitialized && !_controller.value.isPlaying) {
-          // Cast timestamp to double and add 2 milliseconds to the timestamp
-          double timestampInSeconds = questions[currentQuestionIndex]['timestamp'].toDouble();  // Ensure it's a double
-          Duration newTimestamp = Duration(seconds: (timestampInSeconds).toInt() + 2);  // Add 2 milliseconds
-
-          // Seek to the new timestamp
+          double timestampInSeconds = questions[currentQuestionIndex]['timestamp'].toDouble();
+          Duration newTimestamp = Duration(seconds: (timestampInSeconds).toInt() + 2);
           _controller.seekTo(newTimestamp).then((_) {
-            // Ensure the video is ready to play after seeking
             if (_controller.value.isInitialized && !_controller.value.isPlaying) {
-              _controller.play();  // Play the video after seeking
-              print("Video resumed from timestamp: $newTimestamp");
-
-              // Delay resetting the question index until after the video has played for a while
+              _controller.play();
               Future.delayed(Duration(seconds: 2), () {
                 setState(() {
                   currentQuestionIndex = -1;
                   showQuestion = false;
                 });
               });
-            } else {
-              print("Video not ready to play after seeking.");
             }
           }).catchError((error) {
             print("Error seeking to timestamp: $error");
@@ -547,29 +527,113 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       });
     } else {
       print("Wrong Answer. Try again.");
-      // Replay the video from the timestamp of the question
       if (_controller.value.isInitialized) {
         _controller.seekTo(Duration(seconds: questions[currentQuestionIndex]['timestamp'].toInt())).then((_) {
-          // Ensure the video is ready to play after seeking
           if (_controller.value.isInitialized && !_controller.value.isPlaying) {
-            _controller.play();  // Play the video again from the timestamp
-            print("Replaying video from timestamp: ${questions[currentQuestionIndex]['timestamp']}");
-
-            // Delay resetting the question index until after the video has played for a while
+            _controller.play();
             Future.delayed(Duration(seconds: 2), () {
               setState(() {
                 currentQuestionIndex = -1;
                 showQuestion = false;
               });
             });
-          } else {
-            print("Video not ready to play after seeking.");
           }
         }).catchError((error) {
           print("Error seeking to timestamp: $error");
         });
       }
     }
+  }
+  Future<void> generateContent(String question, String videoLink) async {
+    String apiKey = 'AIzaSyDPO8eulyNlh8uE5K1pGyaltgt76nf0044';
+
+    final url = Uri.parse(
+        'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$apiKey');
+    final headers = {'Content-Type': 'application/json'};
+    final body = json.encode({
+      'contents': [
+        {'parts': [{'text': 'Video Link: $videoLink\n\nQuestion: $question'}]}
+      ]
+    });
+
+    try {
+      final response = await http.post(url, headers: headers, body: body);
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+
+        // Debugging: Print the full response to check the structure
+        print("API Response: $data");
+
+        // Ensure the response contains 'candidates' and the structure is correct
+        if (data.containsKey('candidates') && data['candidates'].isNotEmpty) {
+          String aiMessage = data['candidates'][0]['content']['parts'][0]['text'];
+
+          setState(() {
+            geminiResponse = aiMessage;  // Set geminiResponse to the AI message directly
+            // Add the AI response to the chat history
+            chatMessages.add({'sender': 'AI', 'message': aiMessage});
+          });
+        } else {
+          setState(() {
+            geminiResponse = 'No response from Gemini API.';
+          });
+        }
+      } else {
+        setState(() {
+          geminiResponse = 'Failed to generate content: ${response.statusCode}';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        geminiResponse = 'Error: $e';
+      });
+    }
+  }
+
+  void _askQuestionToGemini(BuildContext context) {
+    final TextEditingController _controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Ask Gemini'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _controller,
+                decoration: const InputDecoration(hintText: 'Enter your question...'),
+              ),
+              SizedBox(height: 16),
+              if (geminiResponse.isNotEmpty)
+                Text('Response: $geminiResponse'),
+            ],
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () {
+                String question = _controller.text;
+                if (question.isNotEmpty) {
+                  generateContent(question, videoUrl);
+                  // Add user question to the chat
+                  setState(() {
+                    chatMessages.add({'sender': 'User', 'message': question});
+                  });
+                  Navigator.pop(context);
+                }
+              },
+              child: const Text('Submit'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+              },
+              child: const Text('Cancel'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -581,22 +645,25 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Video Player'),
+      appBar: AppBar(title: Text('Video Player')),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          _askQuestionToGemini(context);
+        },
+        child: const Icon(Icons.question_answer),
+        tooltip: 'Ask Gemini',
       ),
       body: isLoading
-          ? Center(child: CircularProgressIndicator()) // Loading indicator
+          ? Center(child: CircularProgressIndicator())
           : Column(
         children: [
-          // Video Player Widget
           AspectRatio(
             aspectRatio: _controller.value.aspectRatio,
             child: VideoPlayer(_controller),
           ),
-          // Play/Pause video button
           ElevatedButton(
             onPressed: showQuestion
-                ? null // Disable the button when the question is being shown
+                ? null
                 : () {
               if (_controller.value.isPlaying) {
                 _controller.pause();
@@ -606,13 +673,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
               setState(() {});
             },
             child: Icon(
-              _controller.value.isPlaying
-                  ? Icons.pause
-                  : Icons.play_arrow,
+              _controller.value.isPlaying ? Icons.pause : Icons.play_arrow,
               size: 30,
             ),
           ),
-          // Timestamp display
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: Text(
@@ -620,7 +684,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
           ),
-          // Question asking feature
           if (showQuestion)
             Padding(
               padding: const EdgeInsets.all(16.0),
@@ -628,28 +691,40 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                 children: [
                   Text(
                     questions[currentQuestionIndex]['question'] ?? '',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    style: TextStyle(fontSize: 18),
                   ),
                   ...List.generate(
-                    (questions[currentQuestionIndex]['options'] ?? [])
-                        .length,
+                    questions[currentQuestionIndex]['options'].length,
                         (index) {
                       return ElevatedButton(
                         onPressed: () {
                           _handleAnswer(
                               questions[currentQuestionIndex]['options'][index]);
                         },
-                        child: Text(
-                            questions[currentQuestionIndex]['options'][index]),
+                        child: Text(questions[currentQuestionIndex]['options'][index]),
                       );
                     },
                   ),
                 ],
               ),
             ),
+          // Chat interface
+          Expanded(
+            child: ListView.builder(
+              itemCount: chatMessages.length,
+              itemBuilder: (context, index) {
+                return ListTile(
+                  title: Text(
+                    chatMessages[index]['sender']!,
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  subtitle: Text(chatMessages[index]['message']!),
+                );
+              },
+            ),
+          ),
         ],
       ),
     );
   }
 }
-
