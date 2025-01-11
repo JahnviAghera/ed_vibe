@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:yt/learner/course_detail.dart';
 import 'package:yt/learner/dashboard.dart';
 import 'package:yt/learner/recommendation.dart';
 import 'package:yt/learner/search.dart';
@@ -32,6 +33,9 @@ class MyApp extends StatelessWidget {
         '/pref': (context) => UserGoalsScreen(),
         '/skills': (context) => UserSkillsScreen(),
         '/search': (context) => SearchScreen(),
+        // '/recommendations': (context) => const RecommendationScreen(),
+        // '/courseDetail': (context) => const CourseDetailPage(courseId: courseId, userId: userId),
+        // '/myCourses': (context) => const MyCoursesScreen(),
         // '/recommend': (context) => SeeAllRecommendations(courses: courses, user: user),
         // '/signUpStudent': (context) => SignUpWidget(), // For Student sign up
         // '/adminDashboard': (context) => AdminDashboardScreen(),

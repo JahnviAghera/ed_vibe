@@ -1,8 +1,9 @@
+import 'dart:async';
+
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:yt/learner/course_detail.dart';
-import 'package:yt/learner/recommendation.dart';
+import 'package:video_player/video_player.dart';
 
 class Dashboard extends StatefulWidget {
   const Dashboard({Key? key}) : super(key: key);
@@ -15,50 +16,55 @@ class _DashboardState extends State<Dashboard> {
   final DatabaseReference _dbRef = FirebaseDatabase.instance.ref();
   late DatabaseReference _usersRef;
   late DatabaseReference _coursesRef;
-  late DatabaseReference _eventsRef;
+  late DatabaseReference _recommendationsRef;
 
   Map<String, dynamic> user = {};
   List<Map<String, dynamic>> courses = [];
-  List<Map<String, dynamic>> events = [];
+  List<Map<String, dynamic>> recommendations = [];
 
   @override
   void initState() {
     super.initState();
     _usersRef = _dbRef.child('users');
     _coursesRef = _dbRef.child('courses');
-    _eventsRef = _dbRef.child('events');
+    _recommendationsRef = _dbRef.child('recommendations');
     fetchData();
   }
 
   Future<void> fetchData() async {
-    // Fetch user data
-    final userSnapshot = await _usersRef.child('userId1').get();
-    if (userSnapshot.exists) {
-      setState(() {
-        user = Map<String, dynamic>.from(userSnapshot.value as Map);
-      });
-    }
+    try {
+      // Fetch user data
+      final userSnapshot = await _usersRef.child('userId1').get();
+      if (userSnapshot.exists) {
+        setState(() {
+          user = Map<String, dynamic>.from(userSnapshot.value as Map);
+        });
+      }
 
-    // Fetch courses data
-    final coursesSnapshot = await _coursesRef.get();
-    if (coursesSnapshot.exists) {
-      final courseData = Map<String, dynamic>.from(coursesSnapshot.value as Map);
-      setState(() {
-        courses = courseData.entries.map((entry) {
-          return Map<String, dynamic>.from(entry.value);
-        }).toList();
-      });
-    }
+      // Fetch courses data
+      final coursesSnapshot = await _coursesRef.get();
+      if (coursesSnapshot.exists) {
+        final courseData = Map<String, dynamic>.from(coursesSnapshot.value as Map);
+        setState(() {
+          courses = courseData.entries.map((entry) {
+            return Map<String, dynamic>.from(entry.value);
+          }).toList();
+        });
+      }
 
-    // Fetch events data
-    final eventsSnapshot = await _eventsRef.get();
-    if (eventsSnapshot.exists) {
-      final eventData = Map<String, dynamic>.from(eventsSnapshot.value as Map);
-      setState(() {
-        events = eventData.entries.map((entry) {
-          return Map<String, dynamic>.from(entry.value);
-        }).toList();
-      });
+      // Fetch recommendations data
+      final recommendationsSnapshot = await _recommendationsRef.get();
+      if (recommendationsSnapshot.exists) {
+        final recommendationsData =
+        Map<String, dynamic>.from(recommendationsSnapshot.value as Map);
+        setState(() {
+          recommendations = recommendationsData.entries.map((entry) {
+            return Map<String, dynamic>.from(entry.value);
+          }).toList();
+        });
+      }
+    } catch (e) {
+      print("Error fetching data: $e");
     }
   }
 
@@ -66,373 +72,584 @@ class _DashboardState extends State<Dashboard> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            Row(
-              children: [
-                GestureDetector(
-                  onTap: () {},
-                  child: Stack(
-                    alignment: Alignment.topRight,
-                    children: [
-                      Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                          border: Border.all(width: 1, color: const Color(0xFFCBD5E1)),
-                          boxShadow: const [
-                            BoxShadow(
-                              color: Color(0x14344054),
-                              blurRadius: 2,
-                              offset: Offset(0, 1),
-                            ),
-                          ],
-                        ),
-                        child: const Icon(
-                          CupertinoIcons.bell,
-                          color: Colors.black,
-                        ),
-                      ),
-                      Container(
-                        width: 16,
-                        height: 16,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF2551A9),
-                          shape: BoxShape.circle,
-                          border: Border.all(width: 2, color: Colors.white),
-                        ),
-                        child: const Center(
-                          child: Text(
-                            '5',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                GestureDetector(
-                  onTap: () {},
-                  child: Stack(
-                    alignment: Alignment.topRight,
-                    children: [
-                      Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                          border: Border.all(width: 1, color: const Color(0xFFCBD5E1)),
-                          boxShadow: const [
-                            BoxShadow(
-                              color: Color(0x14344054),
-                              blurRadius: 2,
-                              offset: Offset(0, 1),
-                            ),
-                          ],
-                        ),
-                        child: const Icon(
-                          CupertinoIcons.person,
-                          color: Colors.black,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
+        title: const Text('Dashboard'),
+        actions: [
+          IconButton(
+            icon: const Icon(CupertinoIcons.bell),
+            onPressed: () {},
+          ),
+        ],
       ),
       drawer: Drawer(
         child: ListView(
-          padding: EdgeInsets.zero,
-          children: <Widget>[
+          children: [
             DrawerHeader(
-              decoration: BoxDecoration(
-                color: Colors.blue,
-              ),
+              decoration: const BoxDecoration(color: Colors.blue),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   CircleAvatar(
                     radius: 30,
-                    backgroundImage: NetworkImage(user['profile']?['avatarUrl'] ?? ''),
+                    backgroundImage: NetworkImage(
+                      user['profile']?['imageUrl'] ??
+                          'https://via.placeholder.com/150', // Fetched profile image
+                    ),
                   ),
-                  SizedBox(height: 10),
+                  const SizedBox(height: 10),
                   Text(
-                    '${user['profile']?['firstName']} ${user['profile']?['lastName']}',
-                    style: TextStyle(color: Colors.white, fontSize: 18),
+                    '${user['profile']?['firstName'] ?? ''} ${user['profile']?['lastName'] ?? ''}',
+                    style: const TextStyle(color: Colors.white, fontSize: 18),
                   ),
                   Text(
-                    '${user['email']}',
-                    style: TextStyle(color: Colors.white, fontSize: 14),
+                    '${user['email'] ?? ''}',
+                    style: const TextStyle(color: Colors.white, fontSize: 14),
                   ),
                 ],
               ),
             ),
             ListTile(
-              title: Text('Search'),
-              onTap: () {},
+              title: const Text('Recommendations'),
+              onTap: () {
+                Navigator.pushNamed(context, '/recommendations');
+              },
             ),
             ListTile(
-              title: Text('Home'),
-              onTap: () {},
+              title: const Text('My Courses'),
+              onTap: () {
+                Navigator.pushNamed(context, '/myCourses');
+              },
             ),
             ListTile(
-              title: Text('Messages'),
-              onTap: () {},
-            ),
-            ListTile(
-              title: Text('Tutor Bookings'),
-              onTap: () {},
-            ),
-            ListTile(
-              title: Text('My Courses'),
-              onTap: () {},
-            ),
-            ListTile(
-              title: Text('Rating & Reviews'),
-              onTap: () {},
-            ),
-            ListTile(
-              title: Text('Profile'),
-              onTap: () {},
-            ),
-            ListTile(
-              title: Text('Log Out'),
+              title: const Text('Profile'),
               onTap: () {},
             ),
           ],
         ),
       ),
-      body: RefreshIndicator(
-        onRefresh: fetchData, // The method to reload data
-        child: SingleChildScrollView(
-          child: Container(
-            padding: EdgeInsets.symmetric(horizontal: 16),
-            child: Column(
-              children: [
-                SizedBox(height: 16),
-                Container(
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFD1D5DB)),
-                  ),
-                  child: GestureDetector(
+      body: SingleChildScrollView(
+        child: Column(
+          children: [
+            const SizedBox(height: 16),
+            Text(
+              "Welcome, ${user['profile']?['firstName'] ?? 'User'}",
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pushNamed(context, '/recommendations');
+              },
+              child: const Text('View Recommendations'),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Available Courses',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            GestureDetector(
+              child: Text('search'),
+              onTap: (){
+                Navigator.pushNamed(context, '/search');
+              },
+            ),
+            const SizedBox(height: 8),
+            // Inside the Dashboard class
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: List.generate(courses.length, (index) {
+                  return GestureDetector(
                     onTap: () {
-                      Navigator.pushReplacementNamed(context, '/search');
-                    },
-                    child: Row(
-                      children: [
-                        const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 12),
-                          child: Icon(
-                            Icons.search,
-                            color: Color(0xFF94A3B8),
-                          ),
-                        ),
-                        const Expanded(
-                          child: Text(
-                            'Search',
-                            style: TextStyle(color: Color(0xFF94A3B8)),
-                          ),
-                        ),
-                        IconButton(
-                          onPressed: () {},
-                          icon: const Icon(
-                            Icons.tune,
-                            color: Color(0xFF94A3B8),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text("Recommendation"),
-                  ],
-                ),
-                SizedBox(height: 8),
-                // Horizontal Carousel (Course Cards)
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: List.generate(courses.length, (index) {
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 16),
-                        child: Container(
-                          width: 210,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: const Color(0xFFD1D5DB)),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.grey.withOpacity(0.1),
-                                blurRadius: 4,
-                                offset: Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Course Image
-                              ClipRRect(
-                                borderRadius: BorderRadius.only(
-                                  topLeft: Radius.circular(12),
-                                  topRight: Radius.circular(12),
-                                ),
-                                child: Image.asset(
-                                  'assets/example.png',
-                                  height: 120,
-                                  width: double.infinity,
-                                  fit: BoxFit.cover,
-                                ),
-                              ),
-                              // Course Title and Description
-                              Padding(
-                                padding: const EdgeInsets.all(8.0),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      courses[index]['title'] ?? 'Course Title',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.black,
-                                      ),
-                                    ),
-                                    SizedBox(height: 4),
-                                    Text(
-                                      courses[index]['description'] ?? 'Course description goes here.',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.grey[600],
-                                      ),
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              // Action Button
-                              Padding(
-                                padding: const EdgeInsets.all(8.0),
-                                child: // Inside the SingleChildScrollView where you display courses
-                                ElevatedButton(
-                                  onPressed: () {
-                                    final courseId = courses[index]['courseId']; // Get course ID
-                                    final userId = user['userId']; // Ensure user ID is valid
-
-                                    // Navigate to the Course Page with course details and user ID
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                          builder: (context) => CourseDetailPage(courseId: courseId, userId: userId)
-                                      ),
-                                    );
-                                  },
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.blueAccent,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    padding: EdgeInsets.symmetric(vertical: 8, horizontal: 10),
-                                  ),
-                                  child: Text(
-                                    'View Details',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                ),
-
-
-                              ),
-                            ],
+                      String courseId = courses[index].keys.first; // Get the courseId from the keys
+                      print(courses[index]);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => CourseScreen(
                           ),
                         ),
                       );
-                    }),
-                  ),
-                ),
-                SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text("My Courses"),
-                  ],
-                ),
-                SizedBox(height: 8),
-                Column(
-                  children: [
-                    SizedBox(height: 8),
-                    // Display the list of enrolled courses
-                    SingleChildScrollView(
+                    },
+                    child: Container(
+                      width: 200,
+                      margin: const EdgeInsets.symmetric(horizontal: 8),
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.grey.withOpacity(0.2),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
                       child: Column(
-                        children: List.generate(events.length, (index) {
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 16),
-                            child: Container(
-                              padding: EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: const Color(0xFFD1D5DB)),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  // Course Title and Description
-                                  Text(
-                                    events[index]['title'] ?? 'Course Title',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.black,
-                                    ),
-                                  ),
-                                  SizedBox(height: 4),
-                                  Text(
-                                    events[index]['description'] ?? 'Course description goes here.',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.grey[600],
-                                    ),
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ],
-                              ),
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Image.network(
+                            courses[index]['imageUrl']?.isNotEmpty == true
+                                ? courses[index]['imageUrl']
+                                : 'https://via.placeholder.com/150', // Fallback image URL
+                            height: 120,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            courses[index]['title'] ?? 'Course Title',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
                             ),
-                          );
-                        }),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            courses[index]['description'] ?? 'Course description',
+                            style: const TextStyle(fontSize: 12, color: Colors.grey),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
                       ),
                     ),
-                  ],
-                ),
-              ],
+                  );
+                }),
+              ),
             ),
-          ),
+
+          ],
         ),
       ),
     );
   }
 }
+
+class RecommendationScreen extends StatelessWidget {
+  final List<Map<String, dynamic>> recommendations;
+
+  const RecommendationScreen({Key? key, required this.recommendations})
+      : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Recommendations'),
+      ),
+      body: ListView.builder(
+        itemCount: recommendations.length,
+        itemBuilder: (context, index) {
+          return ListTile(
+            leading: Image.network(recommendations[index]['imageUrl'] ?? ''),
+            title: Text(recommendations[index]['title'] ?? ''),
+            subtitle: Text(recommendations[index]['description'] ?? ''),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class CourseScreen extends StatefulWidget {
+  @override
+  _CourseScreenState createState() => _CourseScreenState();
+}
+
+class _CourseScreenState extends State<CourseScreen> {
+  final DatabaseReference _coursesRef = FirebaseDatabase.instance.ref('courses');
+  late Future<Map<String, dynamic>> courses;
+
+  @override
+  void initState() {
+    super.initState();
+    courses = _getCourses();
+  }
+
+  Future<Map<String, dynamic>> _getCourses() async {
+    final snapshot = await _coursesRef.get();
+    return Map<String, dynamic>.from(snapshot.value as Map);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text("Courses"),
+      ),
+      body: FutureBuilder<Map<String, dynamic>>(
+        future: courses,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return Center(child: CircularProgressIndicator());
+          }
+
+          if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
+          }
+
+          if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            return Center(child: Text('No courses available.'));
+          }
+
+          final coursesData = snapshot.data!;
+
+          return ListView.builder(
+            itemCount: coursesData.length,
+            itemBuilder: (context, index) {
+              String courseId = coursesData.keys.elementAt(index);
+              var course = coursesData[courseId];
+              return ListTile(
+                title: Text(course['title']),
+                subtitle: Text(course['description']),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => CourseDetailScreen(courseId: courseId),
+                    ),
+                  );
+                },
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+}
+
+class CourseDetailScreen extends StatefulWidget {
+  final String courseId;
+  CourseDetailScreen({required this.courseId});
+
+  @override
+  _CourseDetailScreenState createState() => _CourseDetailScreenState();
+}
+
+class _CourseDetailScreenState extends State<CourseDetailScreen> {
+  late DatabaseReference _courseRef;
+  late Future<Map<String, dynamic>> courseData;
+
+  @override
+  void initState() {
+    super.initState();
+    _courseRef = FirebaseDatabase.instance.ref('courses/${widget.courseId}');
+    courseData = _getCourseData();
+  }
+
+  Future<Map<String, dynamic>> _getCourseData() async {
+    final snapshot = await _courseRef.get();
+    return Map<String, dynamic>.from(snapshot.value as Map);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text("Course Details"),
+      ),
+      body: FutureBuilder<Map<String, dynamic>>(
+        future: courseData,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return Center(child: CircularProgressIndicator());
+          }
+
+          if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
+          }
+
+          if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            return Center(child: Text('No data available.'));
+          }
+
+          var course = snapshot.data!;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(course['title'], style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+              SizedBox(height: 10),
+              Text(course['description']),
+              SizedBox(height: 20),
+              Expanded(
+                child: ListView.builder(
+                  itemCount: course['videoContent'].length,
+                  itemBuilder: (context, index) {
+                    String videoId = course['videoContent'].keys.elementAt(index);
+                    var video = course['videoContent'][videoId];
+                    return ListTile(
+                      title: Text("Video ${index + 1}"),
+                      subtitle: Text("Length: ${video['length']} seconds"),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => VideoPlayerScreen(
+                              courseId: widget.courseId,
+                              videoId: videoId,  // Pass the videoId to the VideoScreen
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+
+class VideoPlayerScreen extends StatefulWidget {
+  final String courseId;
+  final String videoId;
+
+  VideoPlayerScreen({required this.courseId, required this.videoId});
+
+  @override
+  _VideoPlayerScreenState createState() => _VideoPlayerScreenState();
+}
+class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
+  late VideoPlayerController _controller;
+  String videoUrl = '';
+  List<Map<String, dynamic>> questions = [];
+  bool isLoading = true;  // Track loading state
+  int currentQuestionIndex = -1;  // Track current question index
+  bool showQuestion = false;  // To show/hide question
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchVideoData();
+  }
+
+  // Fetch video URL and questions from Firebase
+  Future<void> _fetchVideoData() async {
+    try {
+      DatabaseReference courseRef = FirebaseDatabase.instance
+          .ref()
+          .child('courses/${widget.courseId}/videoContent/${widget.videoId}');
+
+      // Fetch data from Firebase Realtime Database
+      DatabaseEvent event = await courseRef.once();
+      DataSnapshot snapshot = event.snapshot;
+
+      if (snapshot.value != null) {
+        var videoData = snapshot.value as Map<dynamic, dynamic>;
+
+        setState(() {
+          videoUrl = videoData['url'] ?? '';
+          isLoading = false;  // Video is ready
+
+          // Correct handling of 'questions' field as a list
+          var videoQuestions = videoData['questions'];
+          if (videoQuestions is List) {
+            questions = videoQuestions.map((question) {
+              return {
+                'question': question['question'],
+                'options': question['options'],
+                'correctOption': question['correctOption'],
+                'timestamp': question['timestamp'],
+              };
+            }).toList();
+          }
+        });
+
+        print("Fetched video URL: $videoUrl");
+
+        if (videoUrl.isNotEmpty) {
+          _initializeVideoPlayer();
+        } else {
+          print("Video URL is empty.");
+        }
+      } else {
+        print("No video data found.");
+      }
+    } catch (e) {
+      print("Error fetching video data: $e");
+      setState(() {
+        isLoading = false;  // Stop loading if there's an error
+      });
+    }
+  }
+
+  // Initialize video player
+  void _initializeVideoPlayer() {
+    _controller = VideoPlayerController.network(videoUrl)
+      ..initialize().then((_) {
+        setState(() {});
+        _controller.addListener(() {
+          // Check if a question needs to be shown based on the timestamp
+          _checkForQuestion(_controller.value.position.inSeconds.toDouble());
+        });
+      });
+  }
+
+  // Show the next question when the timestamp is reached
+  void _checkForQuestion(double currentTime) {
+    for (int i = 0; i < questions.length; i++) {
+      if (currentTime == questions[i]['timestamp'] &&
+          currentQuestionIndex != i) {
+        setState(() {
+          currentQuestionIndex = i;
+          showQuestion = true;
+        });
+        // Only pause if the video is playing and the question is new
+        if (_controller.value.isPlaying) {
+          _controller.pause();  // Pause video when question appears
+        }
+        break;
+      }
+    }
+  }
+
+  void _handleAnswer(String selectedOption) {
+    String correctOption = questions[currentQuestionIndex]['correctOption'];
+
+    if (selectedOption == correctOption) {
+      print("Correct Answer!");
+
+      // Add a slight delay before resuming the video to ensure it's fully ready
+      Future.delayed(Duration(seconds: 2), () {
+        if (_controller.value.isInitialized && !_controller.value.isPlaying) {
+          // Cast timestamp to double and add 2 milliseconds to the timestamp
+          double timestampInSeconds = questions[currentQuestionIndex]['timestamp'].toDouble();  // Ensure it's a double
+          Duration newTimestamp = Duration(seconds: (timestampInSeconds).toInt() + 2);  // Add 2 milliseconds
+
+          // Seek to the new timestamp
+          _controller.seekTo(newTimestamp).then((_) {
+            // Ensure the video is ready to play after seeking
+            if (_controller.value.isInitialized && !_controller.value.isPlaying) {
+              _controller.play();  // Play the video after seeking
+              print("Video resumed from timestamp: $newTimestamp");
+
+              // Delay resetting the question index until after the video has played for a while
+              Future.delayed(Duration(seconds: 2), () {
+                setState(() {
+                  currentQuestionIndex = -1;
+                  showQuestion = false;
+                });
+              });
+            } else {
+              print("Video not ready to play after seeking.");
+            }
+          }).catchError((error) {
+            print("Error seeking to timestamp: $error");
+          });
+        }
+      });
+    } else {
+      print("Wrong Answer. Try again.");
+      // Replay the video from the timestamp of the question
+      if (_controller.value.isInitialized) {
+        _controller.seekTo(Duration(seconds: questions[currentQuestionIndex]['timestamp'].toInt())).then((_) {
+          // Ensure the video is ready to play after seeking
+          if (_controller.value.isInitialized && !_controller.value.isPlaying) {
+            _controller.play();  // Play the video again from the timestamp
+            print("Replaying video from timestamp: ${questions[currentQuestionIndex]['timestamp']}");
+
+            // Delay resetting the question index until after the video has played for a while
+            Future.delayed(Duration(seconds: 2), () {
+              setState(() {
+                currentQuestionIndex = -1;
+                showQuestion = false;
+              });
+            });
+          } else {
+            print("Video not ready to play after seeking.");
+          }
+        }).catchError((error) {
+          print("Error seeking to timestamp: $error");
+        });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Video Player'),
+      ),
+      body: isLoading
+          ? Center(child: CircularProgressIndicator()) // Loading indicator
+          : Column(
+        children: [
+          // Video Player Widget
+          AspectRatio(
+            aspectRatio: _controller.value.aspectRatio,
+            child: VideoPlayer(_controller),
+          ),
+          // Play/Pause video button
+          ElevatedButton(
+            onPressed: showQuestion
+                ? null // Disable the button when the question is being shown
+                : () {
+              if (_controller.value.isPlaying) {
+                _controller.pause();
+              } else {
+                _controller.play();
+              }
+              setState(() {});
+            },
+            child: Icon(
+              _controller.value.isPlaying
+                  ? Icons.pause
+                  : Icons.play_arrow,
+              size: 30,
+            ),
+          ),
+          // Timestamp display
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Text(
+              "Timestamp: ${_controller.value.position.inSeconds}s",
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+          ),
+          // Question asking feature
+          if (showQuestion)
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                children: [
+                  Text(
+                    questions[currentQuestionIndex]['question'] ?? '',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  ...List.generate(
+                    (questions[currentQuestionIndex]['options'] ?? [])
+                        .length,
+                        (index) {
+                      return ElevatedButton(
+                        onPressed: () {
+                          _handleAnswer(
+                              questions[currentQuestionIndex]['options'][index]);
+                        },
+                        child: Text(
+                            questions[currentQuestionIndex]['options'][index]),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
